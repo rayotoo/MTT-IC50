@@ -1,0 +1,90 @@
+---
+title: "IC50 from MTT data"
+author: "Raymond Otoo"
+date: "8/11/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("/Users/raymondotoo/OneDrive\ -\ University\ of\ Arkansas\ for\ Medical\ Sciences/Allen\ Lab\ works/MTT\ analysis/nalm_6")
+```
+
+```{r}
+#library(xlsx)
+library("readxl")
+mtt_excelFile <-  read_excel("mttnalm6_48hr0810222.xlsx",sheet = "Sheet1")
+head(mtt_excelFile)
+colnames(mtt_excelFile)
+```
+
+```{r}
+df <- data.frame (uM  = c("DMSO","Medium",0.001,0.005,0.01, 0.05,0.1,0.5,1,5,10,15,20,25,30,35,40,50),
+                  Rep1 = c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+                  Rep2 = c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+                  Rep3 = c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),
+                  Rep4 = c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+                  )
+df
+
+rownames(df)
+```
+
+```{r}
+#`````````````````````````````` Funtion that reorganises the plate info with a loop````````````````````````````````````````
+format_mttResults <- function(df,mtt_excelFile){
+  i = 1
+  j = 1
+  while (i< 19) {
+    df[i,c(2,3,4,5)]<- mtt_excelFile[j,c(2,3,4,5)]
+    df[i+1,c(2,3,4,5)]<- mtt_excelFile[j,c(6,7,8,9)]
+    df[i+2,c(2,3,4,5)]<- mtt_excelFile[j,c(10,11,12,13)]
+    
+    #keep track of the indices for the plate layout of the dataframe and the raw mtt dataFrame.
+    j=j+1
+    i=i+3
+  }
+ return (df) 
+}
+
+format_mttResults(df,mtt_excelFile)
+
+#````````````````````````````````````````````````````````````````````````````````````````````````````````````````````````
+```
+
+```{r}
+library(dplyr, warn.conflicts = FALSE)
+df<-df %>% rowwise() %>% mutate(meann = mean(c(Rep1,Rep2,Rep3,Rep4)))
+df<-df %>% rowwise() %>% mutate(Std_dev = sd(c(Rep1,Rep2,Rep3,Rep4)))
+
+#evaluate an expression in the context, of a data frame
+df$variation <- with(df, (Std_dev / meann) * 100)
+df
+```
+
+```{r}
+#calculate variability for each of the replicates
+df$Rep1_percent_var <- with(df, ((Rep1*100)/df$meann[2]))
+df$Rep2_percent_var <- with(df, ((Rep2*100)/df$meann[2]))
+df$Rep3_percent_var <- with(df, ((Rep3*100)/df$meann[2]))
+df$Rep4_percent_var <- with(df, ((Rep4*100)/df$meann[2]))
+
+df<-df %>% rowwise() %>% mutate(var_avg = mean(c(Rep1_percent_var,Rep2_percent_var,Rep3_percent_var,Rep4_percent_var)))
+df<-df %>% rowwise() %>% mutate(var_std = sd(c(Rep1_percent_var,Rep2_percent_var,Rep3_percent_var,Rep4_percent_var)))
+df$ug <- with(df,df$uM )
+
+#replace the meduim and DMSO cells with zero(s)
+df$ug[1] <- with(df,0 )
+df$ug[2] <- with(df,0 )
+
+#convert the ug character vector to numeric temporarily. Also convert  the ug to Grams
+df$G <- with(df,as.numeric(df$ug) *0.000001 )
+
+#create a column with the log10 of the concentrations of the drugs in Gram
+df$LogC <- with(df,log10(df$G))
+df
+```
+
